@@ -3,6 +3,7 @@ import requests
 from bs4 import BeautifulSoup
 import random
 import traceback
+import re
 
 app = Flask(__name__)
 
@@ -370,6 +371,88 @@ def index():
     return render_template_string(HTML)
 
 
+def extrair_url_canonica(soup, url_atual):
+    el = soup.find("link", rel="canonical")
+    if el and el.get("href"):
+        return el["href"]
+    return url_atual
+
+
+def extrair_id_ml(url):
+    if not url:
+        return None
+    m = re.search(r"/(MLB|MLM|MLA|MCO|MLU)\d+", url)
+    return m.group(0).replace("/", "") if m else None
+
+
+def titulo_do_slug(url):
+    if not url:
+        return None
+    # Mercado Livre: /nome-do-produto/p/MLB123456
+    m = re.search(r"/([^/?#]+)/p/(?:MLB|MLM|MLA|MCO|MLU)\d+", url)
+    if m:
+        slug = m.group(1).replace("-", " ").strip()
+        if len(slug) > 3:
+            return slug
+    # Magazine Luiza / Shopee: /nome-do-produto/p/hash
+    m = re.search(r"/([^/?#]+)/p/[a-z0-9]{6,}", url)
+    if m:
+        slug = m.group(1).replace("-", " ").strip()
+        if len(slug) > 3:
+            return slug
+    return None
+
+
+def extrair_meta_titulo(soup):
+    for nome, valor in [("property", "og:title"), ("name", "twitter:title"),
+                        ("property", "twitter:title"), ("name", "og:title")]:
+        el = soup.find("meta", attrs={nome: valor})
+        if el and el.get("content"):
+            titulo = limpar_titulo(el["content"])
+            if titulo:
+                return titulo
+    return None
+
+
+def extrair_h1_produto(soup, loja):
+    seletores = {
+        "mercadolivre": ["h1.ui-pdp-title", "h1[itemprop='name']", "h1"],
+        "magalu": ["h1", "h1[data-testid='heading-product-title']"],
+        "amazon": ["#productTitle", "h1"],
+        "shopee": ["h1"],
+    }
+    for s in seletores.get(loja, ["h1"]):
+        el = soup.select_one(s)
+        if el:
+            titulo = limpar_titulo(el.get_text(strip=True))
+            if titulo:
+                return titulo
+    return None
+
+
+def limpar_titulo(texto):
+    if not texto:
+        return None
+    texto = re.sub(r"\s+", " ", texto).strip()
+    sufixos = [
+        "| Mercado Livre", "no Mercado Livre", "em Promoção | Mercado Livre",
+        "| Amazon.com.br", "| Amazon", "| Magazine Luiza", "| Shopee Brasil",
+        "| Shopee", "| MercadoLivre", "| Mercado Libre",
+    ]
+    for suf in sufixos:
+        if texto.lower().endswith(suf.lower()):
+            texto = texto[: -len(suf)].strip()
+            break
+    # Ignora títulos típicos de página de perfil/compartilhamento
+    marcadores = ["compartilhou", "divulgou", "recomendou", "recomendações"]
+    tl = texto.lower()
+    if any(m in tl for m in marcadores):
+        return None
+    if len(texto) < 3:
+        return None
+    return texto
+
+
 @app.route("/buscar-titulo", methods=["POST"])
 def buscar_titulo():
     try:
@@ -381,19 +464,53 @@ def buscar_titulo():
             return jsonify({"titulo": None, "erro": "URL não fornecida"})
 
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept-Language": "pt-BR,pt;q=0.9",
         }
-        resposta = requests.get(url, headers=headers, timeout=15)
+
+        # Segue redirects (links de afiliado/encurtados) e pega a URL final
+        resposta = requests.get(url, headers=headers, timeout=20, allow_redirects=True)
         soup = BeautifulSoup(resposta.text, "html.parser")
+        url_final = resposta.url
+        url_canonica = extrair_url_canonica(soup, url_final)
+
+        # Mercado Livre: se acharmos o ID do produto, buscamos a página limpa
+        # (evita cair na página de perfil/indicação do link de afiliado)
+        if loja == "mercadolivre":
+            ml_id = extrair_id_ml(url) or extrair_id_ml(url_final) or extrair_id_ml(url_canonica)
+            if ml_id:
+                try:
+                    r2 = requests.get(
+                        f"https://www.mercadolivre.com.br/p/{ml_id}",
+                        headers=headers, timeout=20, allow_redirects=True
+                    )
+                    soup = BeautifulSoup(r2.text, "html.parser")
+                    url_final = r2.url
+                    url_canonica = extrair_url_canonica(soup, url_final)
+                except Exception:
+                    pass
 
         titulo = None
-        for seletor in ["h1", "title", "#productTitle", ".p-name"]:
-            el = soup.select_one(seletor)
-            if el:
-                texto = el.get_text(strip=True)
-                if texto and len(texto) > 5:
-                    titulo = texto
-                    break
+
+        # 1) Nome do produto a partir do slug da URL (não depende de perfil)
+        titulo = titulo_do_slug(url_canonica) or titulo_do_slug(url_final)
+
+        # 2) Meta tags og:title / twitter:title (mais confiáveis que <title>)
+        if not titulo:
+            titulo = extrair_meta_titulo(soup)
+
+        # 3) Título (h1) específico do produto por loja
+        if not titulo:
+            titulo = extrair_h1_produto(soup, loja)
+
+        # 4) Tag <title>, com limpeza de sufixo e filtro de perfil
+        if not titulo:
+            raw = soup.title.get_text(strip=True) if soup.title else None
+            titulo = limpar_titulo(raw)
+
+        # 5) Última tentativa: slug da URL colada originalmente
+        if not titulo:
+            titulo = titulo_do_slug(url)
 
         if titulo and len(titulo) > 200:
             titulo = titulo[:200] + "..."
