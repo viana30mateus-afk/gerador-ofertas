@@ -50,6 +50,10 @@ HTML = """
             color: #c33; display: none; font-size: 14px;
         }
         .info { font-size: 12px; color: #888; margin-top: 4px; }
+        .loja-badge {
+            display: inline-block; padding: 4px 10px; border-radius: 12px;
+            font-size: 12px; font-weight: 600; margin-left: 8px;
+        }
     </style>
 </head>
 <body>
@@ -58,14 +62,17 @@ HTML = """
         <p class="subtitle">Cole o link e monte sua mensagem em segundos</p>
 
         <label>Link do produto *</label>
-        <input type="url" id="url" placeholder="https://www.magazineluiza.com.br/..." required>
+        <input type="url" id="url" placeholder="https://www.magazineluiza.com.br/..." oninput="detectarLoja()">
+        <span id="lojaDetectada" style="font-size: 12px; color: #25d366; margin-top: 4px; display: none;"></span>
 
         <label>Loja</label>
         <select id="loja">
+            <option value="auto">🔍 Detectar automaticamente</option>
             <option value="magalu">Magazine Luiza</option>
             <option value="mercadolivre">Mercado Livre</option>
             <option value="amazon">Amazon</option>
             <option value="shopee">Shopee</option>
+            <option value="aliexpress">AliExpress</option>
         </select>
 
         <label>Título do produto</label>
@@ -96,7 +103,50 @@ HTML = """
     </div>
 
     <script>
-        // Formata e interpreta valores em pt-BR
+        function detectarLoja() {
+            const url = document.getElementById("url").value.trim();
+            const badge = document.getElementById("lojaDetectada");
+            const select = document.getElementById("loja");
+
+            if (!url) {
+                badge.style.display = "none";
+                return;
+            }
+
+            let loja = "";
+            let cor = "";
+
+            if (url.includes("mercadolivre.com.br") || url.includes("meli.la") || url.includes("mlb")) {
+                loja = "Mercado Livre";
+                cor = "#ffe600";
+                select.value = "mercadolivre";
+            } else if (url.includes("magazineluiza.com.br") || url.includes("magalu")) {
+                loja = "Magazine Luiza";
+                cor = "#0086ff";
+                select.value = "magalu";
+            } else if (url.includes("amazon.com.br")) {
+                loja = "Amazon";
+                cor = "#ff9900";
+                select.value = "amazon";
+            } else if (url.includes("shopee.com.br")) {
+                loja = "Shopee";
+                cor = "#ee4d2d";
+                select.value = "shopee";
+            } else if (url.includes("aliexpress.com")) {
+                loja = "AliExpress";
+                cor = "#ff4747";
+                select.value = "aliexpress";
+            }
+
+            if (loja) {
+                badge.textContent = "✓ " + loja + " detectada";
+                badge.style.color = cor;
+                badge.style.display = "block";
+            } else {
+                badge.style.display = "none";
+            }
+        }
+
         function parsePreco(valor) {
             if (!valor) return null;
             let v = String(valor).replace(/[R$\s]/g, "").trim();
@@ -132,6 +182,7 @@ HTML = """
 
         async function buscarTitulo() {
             const url = document.getElementById("url").value.trim();
+            const loja = document.getElementById("loja").value;
             if (!url) {
                 mostrarErro("Cole o link do produto primeiro para buscar o título");
                 return null;
@@ -140,7 +191,7 @@ HTML = """
                 const res = await fetch("/buscar-titulo", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ url, loja: document.getElementById("loja").value })
+                    body: JSON.stringify({ url, loja })
                 });
                 if (!res.ok) throw new Error("Erro ao buscar título: " + res.status);
                 const data = await res.json();
@@ -186,19 +237,27 @@ HTML = """
             document.getElementById("btnWhats").style.display = "none";
 
             const url = document.getElementById("url").value.trim();
-            const loja = document.getElementById("loja").value;
+            let loja = document.getElementById("loja").value;
             const tituloManual = document.getElementById("titulo").value.trim();
             let piada = document.getElementById("piada").value.trim();
-            const preco = document.getElementById("preco").value.trim();
-            const precoAntigo = document.getElementById("preco_antigo").value.trim();
+            const precoTexto = document.getElementById("preco").value.trim();
+            const precoAntigoTexto = document.getElementById("preco_antigo").value.trim();
             const cupom = document.getElementById("cupom").value.trim();
 
             if (!url) {
                 mostrarErro("Por favor, cole o link do produto");
                 return;
             }
-            if (!preco) {
+            if (!precoTexto) {
                 mostrarErro("Por favor, informe o preço atual");
+                return;
+            }
+
+            const precoNum = parsePreco(precoTexto);
+            const precoAntigoNum = parsePreco(precoAntigoTexto);
+
+            if (precoNum == null) {
+                mostrarErro("Preço atual inválido. Use formato como 370,64 ou 370.64");
                 return;
             }
 
@@ -209,7 +268,6 @@ HTML = """
                 titulo = await buscarTitulo();
             }
 
-            // Gera piada automaticamente se o campo estiver vazio
             if (!piada) {
                 piada = await gerarPiada();
             }
@@ -221,7 +279,6 @@ HTML = """
                 if (piada) texto += piada + "\\n\\n";
                 if (titulo) texto += titulo + "\\n";
 
-                // Detecta o maior e o menor para montar "De:" e "Por só:" corretamente
                 let de = "";
                 let por = formatarPreco(precoNum);
                 if (precoAntigoNum != null) {
@@ -274,7 +331,6 @@ HTML = """
 </html>
 """
 
-# Categorias de piadas baseadas em palavras-chave do título
 PIADAS = {
     "microondas": [
         "Esquentar a marmita em 2 minutos virou rotina? 🍱😄",
@@ -509,6 +565,174 @@ PIADAS = {
     "pet": [
         "Seu pet vai amar! 🐾😍"
     ],
+    "perfume": [
+        "Cheiro bom abre portas! 🌸 Esse perfume é sucesso garantido.",
+        "Fragrância que marca presença! 💐"
+    ],
+    "body splash": [
+        "Frescor o dia todo? Body splash resolve! 💦😄",
+        "Cheirinho bom sem pesar? Body splash é a escolha! 🌺"
+    ],
+    "maquiagem": [
+        "Realçar a beleza sem exagero? Essa maquiagem entrega! 💄",
+        "Make perfeita em minutos? Só com esses produtos! 💋"
+    ],
+    "creme": [
+        "Pele hidratada é pele feliz! 🧴😄",
+        "Cuidado com a pele nunca é demais! 🌿"
+    ],
+    "shampoo": [
+        "Cabelo bonito começa no banho! 🚿✨",
+        "Shampoo bom é aquele que rende e cuida! 💆"
+    ],
+    "tablet": [
+        "Tablet novo, produtividade lá em cima! 📱😄",
+        "Navegar, estudar e se divertir num só aparelho! 📲"
+    ],
+    "impressora": [
+        "Imprimir em casa sem susto no tinteiro? 🖨️ Essa resolve!",
+        "Home office pede impressora confiável! 📄"
+    ],
+    "webcam": [
+        "Reunião online com cara de profissional? 📷 Webcam nova resolve!",
+        "Ninguém merece imagem pixelada! 🖥️😅"
+    ],
+    "caixa de som": [
+        "Som alto e claro pra qualquer rolê? 🎵 Caixa de som é sucesso!",
+        "Festa em casa pede som de qualidade! 🔊"
+    ],
+    "kindle": [
+        "Ler sem cansar a vista? 📚 Kindle é vida!",
+        "Milhares de livros no bolso! 📖😍"
+    ],
+    "console": [
+        "Gamer de verdade sabe: console novo é alegria pura! 🎮",
+        "Jogar em alta qualidade não tem preço! 🕹️"
+    ],
+    "playstation": [
+        "PS novo é motivo de comemoração! 🎮😄",
+        "Hora do upgrade gamer! 🕹️"
+    ],
+    "xbox": [
+        "Xbox novo, game night garantido! 🎮",
+        "Game Pass e Xbox: combinação perfeita! 🕹️"
+    ],
+    "nintendo": [
+        "Diversão em família começa com um Nintendo! 🎮",
+        "Jogos clássicos e novos numa só plataforma! 🕹️"
+    ],
+    "controle": [
+        "Controle novo, gameplay sem travamento! 🎮",
+        "Chega de stick drift! Controle novo resolve. 🕹️"
+    ],
+    "headset": [
+        "Ouvir o inimigo antes de ver? Headset bom faz diferença! 🎧",
+        "Som imersivo pra dominar o game! 🎮"
+    ],
+    "cadeira gamer": [
+        "Sua coluna agradece uma cadeira gamer! 🎮😌",
+        "Conforto pra maratonar jogos! 🪑"
+    ],
+    "mochila": [
+        "Levar tudo sem dor nas costas? Mochila boa resolve! 🎒",
+        "Organização e estilo numa só peça! 🎒😄"
+    ],
+    "garrafa": [
+        "Hidratação com estilo? Garrafa térmica é sucesso! 💧",
+        "Água gelada o dia todo? Garrafa térmica resolve! 🧊"
+    ],
+    "relógio": [
+        "Estilo e pontualidade no pulso! ⌚",
+        "Relógio bom é aquele que combina com tudo! ⌚😎"
+    ],
+    "óculos": [
+        "Proteção solar com estilo? Óculos novo é sucesso! 🕶️",
+        "Ver o mundo com mais estilo! 👓😄"
+    ],
+    "tenis": [
+        "Conforto nos pés pra qualquer ocasião! 👟",
+        "Tênis novo, passo leve! 👟😄"
+    ],
+    "tênis": [
+        "Conforto nos pés pra qualquer ocasião! 👟",
+        "Tênis novo, passo leve! 👟😄"
+    ],
+    "bolsa": [
+        "Bolsa nova, look completo! 👜",
+        "Estilo e praticidade numa só peça! 👜😄"
+    ],
+    "carteira": [
+        "Organizar os cartões sem perder o estilo? 👛",
+        "Carteira nova, vida organizada! 💳"
+    ],
+    "ferramenta": [
+        "Ferramenta boa é investimento, não gasto! 🔧",
+        "DIY com ferramenta certa é outra coisa! 🛠️"
+    ],
+    "furadeira": [
+        "Furar parede sem sofrimento? Furadeira nova resolve! 🔧",
+        "Montar móvel sozinho nunca foi tão fácil! 🛠️"
+    ],
+    "parafusadeira": [
+        "Parafusar sem esforço? Parafusadeira é vida! 🔧",
+        "Montagem de móveis sem dor nas mãos! 🛠️"
+    ],
+    "jardim": [
+        "Jardim bonito começa com as ferramentas certas! 🌱",
+        "Cuidar das plantas com prazer! 🌿"
+    ],
+    "cortador de grama": [
+        "Gramado aparadinho sem esforço! 🌱",
+        "Cortar grama virou tarefa fácil! 🌿"
+    ],
+    "piscina": [
+        "Verão pede piscina! 🏊‍♂️",
+        "Refrescar em casa é luxo que todo mundo merece! 💦"
+    ],
+    "brinquedo": [
+        "Diversão garantida pra criançada! 🎉",
+        "Brinquedo novo, sorriso no rosto! 🧸"
+    ],
+    "lego": [
+        "Montar e criar sem limites! 🧱",
+        "Diversão que estimula a criatividade! 🎨"
+    ],
+    "boneca": [
+        "Diversão e imaginação pra criançada! 🎀",
+        "Boneca nova, história nova! 🧸"
+    ],
+    "carrinho": [
+        "Acelerar a diversão! 🚗",
+        "Carrinho novo, pista garantida! 🏎️"
+    ],
+    "jogo de tabuleiro": [
+        "Noite de jogos em família! 🎲",
+        "Diversão analógica numa era digital! 🎯"
+    ],
+    "livro": [
+        "Leitura boa é viagem sem sair de casa! 📚",
+        "Conhecimento e entretenimento num só lugar! 📖"
+    ],
+    "caderno": [
+        "Organizar ideias com estilo! 📓",
+        "Caderno novo, ano produtivo! ✏️"
+    ],
+    "caneta": [
+        "Escrever com fluidez é outro nível! 🖊️",
+        "Caneta boa faz toda diferença! ✒️"
+    ],
+    "mochila escolar": [
+        "Volta às aulas com estilo! 🎒",
+        "Levar tudo sem dor nas costas! 📚"
+    ],
+    "lancheira": [
+        "Lanche fresco e organizado! 🥪",
+        "Lancheira boa, merenda melhor! 🍎"
+    ],
+    "estojo": [
+        "Organização começa no estojo! ✏️",
+        "Material escolar em ordem! 📐"
+    ],
 }
 
 FALLBACK = [
@@ -525,23 +749,47 @@ def gerar_piada(titulo):
         return random.choice(FALLBACK)
 
     titulo_lower = titulo.lower()
+    
+    # Tenta encontrar categoria específica
     for categoria, piadas in PIADAS.items():
         if categoria in titulo_lower:
             return random.choice(piadas)
 
-    # Geração dinâmica com o nome do produto para cobrir qualquer categoria
+    # Geração dinâmica com o nome do produto
     nome_produto = titulo.strip()
     if len(nome_produto) > 60:
         nome_produto = nome_produto[:57].rstrip() + "..."
+    
     padroes_dinamicos = [
-        "Já pensou em dar um up na sua vida com um {prod}? 😄",
-        "Seu {prod} já deu o que tinha que dar? Hora de trocar! 😅",
-        "Cansado de sofrer com o {prod}? Esse aqui resolve! 🎯",
-        "Achou o {prod} perfeito? Corre que é promoção! 🏃‍♂️",
-        "Vai deixar essa oferta de {prod} passar? 😱",
-        "Promoção boa de {prod} é assim: chega calada e some rápido! ⏰",
+        f"Já pensou em dar um up na sua vida com um {nome_produto}? 😄",
+        f"Seu {nome_produto.split()[0] if len(nome_produto.split()) > 1 else nome_produto} já deu o que tinha que dar? Hora de trocar! 😅",
+        f"Cansado de sofrer? Esse aqui resolve! 🎯",
+        f"Achou o produto perfeito? Corre que é promoção! 🏃‍♂️",
+        f"Vai deixar essa oferta passar? 😱",
+        f"Promoção boa é assim: chega calada e some rápido! ⏰",
     ]
-    return random.choice(padroes_dinamicos).format(prod=nome_produto)
+    return random.choice(padroes_dinamicos)
+
+
+def detectar_loja(url):
+    """Detecta automaticamente a loja pela URL"""
+    if not url:
+        return "magalu"
+    
+    url_lower = url.lower()
+    
+    if "mercadolivre.com.br" in url_lower or "meli.la" in url_lower or "mlb" in url_lower:
+        return "mercadolivre"
+    elif "magazineluiza.com.br" in url_lower or "magalu" in url_lower:
+        return "magalu"
+    elif "amazon.com.br" in url_lower:
+        return "amazon"
+    elif "shopee.com.br" in url_lower:
+        return "shopee"
+    elif "aliexpress.com" in url_lower:
+        return "aliexpress"
+    
+    return "magalu"
 
 
 @app.route("/")
@@ -578,6 +826,12 @@ def titulo_do_slug(url):
         slug = m.group(1).replace("-", " ").strip()
         if len(slug) > 3:
             return slug
+    # AliExpress: /item/nome-do-produto.html
+    m = re.search(r"/item/([^/?#]+)\.html", url)
+    if m:
+        slug = m.group(1).replace("-", " ").strip()
+        if len(slug) > 3:
+            return slug
     return None
 
 
@@ -596,8 +850,9 @@ def extrair_h1_produto(soup, loja):
     seletores = {
         "mercadolivre": ["h1.ui-pdp-title", "h1[itemprop='name']", "h1"],
         "magalu": ["h1", "h1[data-testid='heading-product-title']"],
-        "amazon": ["#productTitle", "h1"],
+        "amazon": ["#productTitle", "h1", "span#productTitle", "div#productTitle"],
         "shopee": ["h1"],
+        "aliexpress": ["h1", ".product-title", ".product-name", "span.product-title-text"],
     }
     for s in seletores.get(loja, ["h1"]):
         el = soup.select_one(s)
@@ -615,7 +870,7 @@ def limpar_titulo(texto):
     sufixos = [
         "| Mercado Livre", "no Mercado Livre", "em Promoção | Mercado Livre",
         "| Amazon.com.br", "| Amazon", "| Magazine Luiza", "| Shopee Brasil",
-        "| Shopee", "| MercadoLivre", "| Mercado Libre",
+        "| Shopee", "| MercadoLivre", "| Mercado Libre", "| AliExpress",
     ]
     for suf in sufixos:
         if texto.lower().endswith(suf.lower()):
@@ -636,10 +891,14 @@ def buscar_titulo():
     try:
         dados = request.json
         url = dados.get("url")
-        loja = dados.get("loja", "magalu")
+        loja = dados.get("loja", "auto")
 
         if not url:
             return jsonify({"titulo": None, "erro": "URL não fornecida"})
+
+        # Detecta loja automaticamente se estiver em "auto"
+        if loja == "auto":
+            loja = detectar_loja(url)
 
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -653,7 +912,6 @@ def buscar_titulo():
         url_canonica = extrair_url_canonica(soup, url_final)
 
         # Mercado Livre: se acharmos o ID do produto, buscamos a página limpa
-        # (evita cair na página de perfil/indicação do link de afiliado)
         if loja == "mercadolivre":
             ml_id = extrair_id_ml(url) or extrair_id_ml(url_final) or extrair_id_ml(url_canonica)
             if ml_id:
@@ -670,10 +928,10 @@ def buscar_titulo():
 
         titulo = None
 
-        # 1) Nome do produto a partir do slug da URL (não depende de perfil)
+        # 1) Nome do produto a partir do slug da URL
         titulo = titulo_do_slug(url_canonica) or titulo_do_slug(url_final)
 
-        # 2) Meta tags og:title / twitter:title (mais confiáveis que <title>)
+        # 2) Meta tags og:title / twitter:title
         if not titulo:
             titulo = extrair_meta_titulo(soup)
 
