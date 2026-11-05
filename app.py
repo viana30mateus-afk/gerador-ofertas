@@ -145,16 +145,16 @@ HTML = """
 
         function parsePreco(valor) {
             if (!valor) return null;
-            let v = String(valor).replace(/[R$\s]/g, "").trim();
+            let v = String(valor).replace(/[R$\\s]/g, "").trim();
             if (!v) return null;
             if (v.includes(",")) {
-                v = v.replace(/\./g, "").replace(",", ".");
+                v = v.replace(/\\./g, "").replace(",", ".");
             } else {
                 const partes = v.split(".");
                 if (partes.length === 2 && partes[1].length <= 2) {
                     v = partes[0] + "." + partes[1];
                 } else {
-                    v = v.replace(/\./g, "");
+                    v = v.replace(/\\./g, "");
                 }
             }
             const n = parseFloat(v);
@@ -272,8 +272,8 @@ HTML = """
 
             try {
                 let texto = "";
-                if (piada) texto += piada + "\n\n";
-                if (titulo) texto += titulo + "\n";
+                if (piada) texto += piada + "\\n\\n";
+                if (titulo) texto += titulo + "\\n";
 
                 // Identifica maior e menor preço automaticamente
                 let menor = precoNum;
@@ -298,11 +298,11 @@ HTML = """
                     de = formatarPreco(maior);
                 }
 
-                if (de) texto += "❌ De: " + de + "\n";
+                if (de) texto += "❌ De: " + de + "\\n";
                 texto += "✅ Por só: " + por;
                 if (loja === "amazon") texto += " no Programe e Poupe";
-                texto += "\n";
-                if (cupom) texto += "🎟️ Cupom: " + cupom + "\n";
+                texto += "\\n";
+                if (cupom) texto += "🎟️ Cupom: " + cupom + "\\n";
                 texto += "🛒 Link: " + url;
 
                 mensagemFinal = texto;
@@ -761,12 +761,10 @@ def gerar_piada(titulo):
 
     titulo_lower = titulo.lower()
     
-    # Tenta encontrar categoria específica
     for categoria, piadas in PIADAS.items():
         if categoria in titulo_lower:
             return random.choice(piadas)
 
-    # Geração dinâmica com o nome do produto
     nome_produto = titulo.strip()
     if len(nome_produto) > 60:
         nome_produto = nome_produto[:57].rstrip() + "..."
@@ -783,7 +781,6 @@ def gerar_piada(titulo):
 
 
 def detectar_loja(url):
-    """Detecta automaticamente a loja pela URL"""
     if not url:
         return "magalu"
     
@@ -825,19 +822,16 @@ def extrair_id_ml(url):
 def titulo_do_slug(url):
     if not url:
         return None
-    # Mercado Livre: /nome-do-produto/p/MLB123456
     m = re.search(r"/([^/?#]+)/p/(?:MLB|MLM|MLA|MCO|MLU)\d+", url)
     if m:
         slug = m.group(1).replace("-", " ").strip()
         if len(slug) > 3:
             return slug
-    # Magazine Luiza / Shopee: /nome-do-produto/p/hash
     m = re.search(r"/([^/?#]+)/p/[a-z0-9]{6,}", url)
     if m:
         slug = m.group(1).replace("-", " ").strip()
         if len(slug) > 3:
             return slug
-    # AliExpress: /item/nome-do-produto.html
     m = re.search(r"/item/([^/?#]+)\.html", url)
     if m:
         slug = m.group(1).replace("-", " ").strip()
@@ -887,7 +881,6 @@ def limpar_titulo(texto):
         if texto.lower().endswith(suf.lower()):
             texto = texto[: -len(suf)].strip()
             break
-    # Remove preço que possa vir junto com o título (ex.: "... - R$ 599")
     texto = re.sub(
         r"\s*[-–—]\s*R\$\s*\d{1,3}(?:\.\d{3})*(?:,\d{2})?(?:\s*(?:no pix|à vista|no boleto|pix))?\s*$",
         "",
@@ -900,7 +893,6 @@ def limpar_titulo(texto):
         texto,
         flags=re.IGNORECASE,
     ).strip()
-    # Ignora títulos típicos de página de perfil/compartilhamento
     marcadores = ["compartilhou", "divulgou", "recomendou", "recomendações"]
     tl = texto.lower()
     if any(m in tl for m in marcadores):
@@ -915,7 +907,6 @@ def limpar_preco_do_titulo(titulo):
     if not titulo:
         return titulo
 
-    # Remove padrões tipo: - R$ 599,00 / R$ 599 / por R$ 599 / R$: 599 no final
     padroes = [
         r"\s*[-:–—]\s*[Rr]\$\s*[\d.,]+\s*$",
         r"\s*[Rr]\$\s*[\d.,]+\s*$",
@@ -942,7 +933,6 @@ def buscar_titulo():
         if not url:
             return jsonify({"titulo": None, "erro": "URL não fornecida"})
 
-        # Detecta loja automaticamente se estiver em "auto"
         if loja == "auto":
             loja = detectar_loja(url)
 
@@ -951,13 +941,11 @@ def buscar_titulo():
             "Accept-Language": "pt-BR,pt;q=0.9",
         }
 
-        # Segue redirects (links de afiliado/encurtados) e pega a URL final
         resposta = requests.get(url, headers=headers, timeout=20, allow_redirects=True)
         soup = BeautifulSoup(resposta.text, "html.parser")
         url_final = resposta.url
         url_canonica = extrair_url_canonica(soup, url_final)
 
-        # Mercado Livre: se acharmos o ID do produto, buscamos a página limpa
         if loja == "mercadolivre":
             ml_id = extrair_id_ml(url) or extrair_id_ml(url_final) or extrair_id_ml(url_canonica)
             if ml_id:
@@ -974,27 +962,21 @@ def buscar_titulo():
 
         titulo = None
 
-        # 1) Nome do produto a partir do slug da URL
         titulo = titulo_do_slug(url_canonica) or titulo_do_slug(url_final)
 
-        # 2) Meta tags og:title / twitter:title
         if not titulo:
             titulo = extrair_meta_titulo(soup)
 
-        # 3) Título (h1) específico do produto por loja
         if not titulo:
             titulo = extrair_h1_produto(soup, loja)
 
-        # 4) Tag <title>, com limpeza de sufixo e filtro de perfil
         if not titulo:
             raw = soup.title.get_text(strip=True) if soup.title else None
             titulo = limpar_titulo(raw)
 
-        # 5) Última tentativa: slug da URL colada originalmente
         if not titulo:
             titulo = titulo_do_slug(url)
 
-        # Remove preço que venha junto no título (ex.: "... - R$ 599")
         if titulo:
             titulo = limpar_preco_do_titulo(titulo)
 
