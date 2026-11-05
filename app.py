@@ -50,10 +50,6 @@ HTML = """
             color: #c33; display: none; font-size: 14px;
         }
         .info { font-size: 12px; color: #888; margin-top: 4px; }
-        .loja-badge {
-            display: inline-block; padding: 4px 10px; border-radius: 12px;
-            font-size: 12px; font-weight: 600; margin-left: 8px;
-        }
     </style>
 </head>
 <body>
@@ -276,28 +272,38 @@ HTML = """
 
             try {
                 let texto = "";
-                if (piada) texto += piada + "\\n\\n";
-                if (titulo) texto += titulo + "\\n";
+                if (piada) texto += piada + "\n\n";
+                if (titulo) texto += titulo + "\n";
 
-                let de = "";
-                let por = formatarPreco(precoNum);
+                // Identifica maior e menor preço automaticamente
+                let menor = precoNum;
+                let maior = precoAntigoNum;
+
                 if (precoAntigoNum != null) {
                     if (precoAntigoNum > precoNum) {
-                        de = formatarPreco(precoAntigoNum);
+                        maior = precoAntigoNum;
+                        menor = precoNum;
                     } else if (precoNum > precoAntigoNum) {
-                        de = formatarPreco(precoNum);
-                        por = formatarPreco(precoAntigoNum);
+                        maior = precoNum;
+                        menor = precoAntigoNum;
                     } else {
-                        de = formatarPreco(precoAntigoNum);
+                        maior = precoAntigoNum;
+                        menor = precoNum;
                     }
                 }
 
-                if (de) texto += `❌ De: ${de}\\n`;
-                texto += `✅ Por só: ${por}`;
+                let de = "";
+                let por = formatarPreco(menor);
+                if (maior != null) {
+                    de = formatarPreco(maior);
+                }
+
+                if (de) texto += "❌ De: " + de + "\n";
+                texto += "✅ Por só: " + por;
                 if (loja === "amazon") texto += " no Programe e Poupe";
-                texto += "\\n";
-                if (cupom) texto += `🎟️ Cupom: ${cupom}\\n`;
-                texto += `🛒 Link: ${url}`;
+                texto += "\n";
+                if (cupom) texto += "🎟️ Cupom: " + cupom + "\n";
+                texto += "🛒 Link: " + url;
 
                 mensagemFinal = texto;
 
@@ -448,7 +454,8 @@ PIADAS = {
         "Teclado com tecla que não responde? ⌨️ Chega de sofrer!"
     ],
     "monitor": [
-        "Monitor pequeno é igual cineminha de bolso! 🖥️ Amplia essa visão!"
+        "Monitor pequeno é igual cineminha de bolso! 🖥️ Amplia essa visão!",
+        "Ver tudo em alta definição é outro nível! 🖥️😎"
     ],
     "mixer": [
         "Sopa, vitamina ou bolo, o mixer resolve tudo na cozinha. 🥣😄",
@@ -567,15 +574,18 @@ PIADAS = {
     ],
     "perfume": [
         "Cheiro bom abre portas! 🌸 Esse perfume é sucesso garantido.",
-        "Fragrância que marca presença! 💐"
+        "Fragrância que marca presença! 💐",
+        "Perfume novo, elogios garantidos! 💐😍"
     ],
     "body splash": [
         "Frescor o dia todo? Body splash resolve! 💦😄",
-        "Cheirinho bom sem pesar? Body splash é a escolha! 🌺"
+        "Cheirinho bom sem pesar? Body splash é a escolha! 🌺",
+        "Body splash é leveza e frescor em cada borrifada! 💧"
     ],
     "maquiagem": [
         "Realçar a beleza sem exagero? Essa maquiagem entrega! 💄",
-        "Make perfeita em minutos? Só com esses produtos! 💋"
+        "Make perfeita em minutos? Só com esses produtos! 💋",
+        "Maquiagem boa é aquela que dura o dia todo! 💅"
     ],
     "creme": [
         "Pele hidratada é pele feliz! 🧴😄",
@@ -627,7 +637,8 @@ PIADAS = {
     ],
     "headset": [
         "Ouvir o inimigo antes de ver? Headset bom faz diferença! 🎧",
-        "Som imersivo pra dominar o game! 🎮"
+        "Som imersivo pra dominar o game! 🎮",
+        "Headset bom é aquele que não aperta a cabeça! 🎧😄"
     ],
     "cadeira gamer": [
         "Sua coluna agradece uma cadeira gamer! 🎮😌",
@@ -876,6 +887,19 @@ def limpar_titulo(texto):
         if texto.lower().endswith(suf.lower()):
             texto = texto[: -len(suf)].strip()
             break
+    # Remove preço que possa vir junto com o título (ex.: "... - R$ 599")
+    texto = re.sub(
+        r"\s*[-–—]\s*R\$\s*\d{1,3}(?:\.\d{3})*(?:,\d{2})?(?:\s*(?:no pix|à vista|no boleto|pix))?\s*$",
+        "",
+        texto,
+        flags=re.IGNORECASE,
+    )
+    texto = re.sub(
+        r"\s*R\$\s*\d{1,3}(?:\.\d{3})*(?:,\d{2})?\s*$",
+        "",
+        texto,
+        flags=re.IGNORECASE,
+    ).strip()
     # Ignora títulos típicos de página de perfil/compartilhamento
     marcadores = ["compartilhou", "divulgou", "recomendou", "recomendações"]
     tl = texto.lower()
@@ -884,6 +908,28 @@ def limpar_titulo(texto):
     if len(texto) < 3:
         return None
     return texto
+
+
+def limpar_preco_do_titulo(titulo):
+    """Remove preço que venha junto no final do título (ex.: '... - R$ 599')"""
+    if not titulo:
+        return titulo
+
+    # Remove padrões tipo: - R$ 599,00 / R$ 599 / por R$ 599 / R$: 599 no final
+    padroes = [
+        r"\s*[-:–—]\s*[Rr]\$\s*[\d.,]+\s*$",
+        r"\s*[Rr]\$\s*[\d.,]+\s*$",
+        r"\s*por\s+[Rr]\$\s*[\d.,]+\s*$",
+        r"\s*[Rr]\$\s*[\d.,]+\s*[-:–—]\s*$",
+        r"\s*[-:–—]\s*\d+(?:\.\d{3})*(?:,\d{2})?\s*$",
+        r"\s*\d+(?:\.\d{3})*(?:,\d{2})?\s*$",
+    ]
+    novo = titulo
+    for p in padroes:
+        novo = re.sub(p, "", novo).rstrip(" -–—,:;·|")
+        if novo != titulo:
+            titulo = novo
+    return titulo.strip()
 
 
 @app.route("/buscar-titulo", methods=["POST"])
@@ -947,6 +993,10 @@ def buscar_titulo():
         # 5) Última tentativa: slug da URL colada originalmente
         if not titulo:
             titulo = titulo_do_slug(url)
+
+        # Remove preço que venha junto no título (ex.: "... - R$ 599")
+        if titulo:
+            titulo = limpar_preco_do_titulo(titulo)
 
         if titulo and len(titulo) > 200:
             titulo = titulo[:200] + "..."
