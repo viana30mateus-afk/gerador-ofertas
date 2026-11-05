@@ -77,10 +77,10 @@ HTML = """
         <button type="button" class="btn-piada" onclick="gerarPiada()">🎲 Gerar piada automática</button>
 
         <label>Preço atual *</label>
-        <input type="text" id="preco" placeholder="R$ 370,64">
+        <input type="text" id="preco" placeholder="Ex.: 370,64" onblur="formatarCampoPreco('preco')">
 
         <label>Preço antigo (opcional)</label>
-        <input type="text" id="preco_antigo" placeholder="R$ 499,90">
+        <input type="text" id="preco_antigo" placeholder="Ex.: 499,90" onblur="formatarCampoPreco('preco_antigo')">
 
         <label>Cupom de desconto (opcional)</label>
         <input type="text" id="cupom" placeholder="CUPOM10">
@@ -96,6 +96,38 @@ HTML = """
     </div>
 
     <script>
+        // Formata e interpreta valores em pt-BR
+        function parsePreco(valor) {
+            if (!valor) return null;
+            let v = String(valor).replace(/[R$\s]/g, "").trim();
+            if (!v) return null;
+            if (v.includes(",")) {
+                v = v.replace(/\./g, "").replace(",", ".");
+            } else {
+                const partes = v.split(".");
+                if (partes.length === 2 && partes[1].length <= 2) {
+                    v = partes[0] + "." + partes[1];
+                } else {
+                    v = v.replace(/\./g, "");
+                }
+            }
+            const n = parseFloat(v);
+            return isNaN(n) ? null : n;
+        }
+
+        function formatarPreco(n) {
+            if (n == null || isNaN(n)) return "";
+            return "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        function formatarCampoPreco(id) {
+            const el = document.getElementById(id);
+            const n = parsePreco(el.value);
+            if (n != null) {
+                el.value = formatarPreco(n);
+            }
+        }
+
         let mensagemFinal = "";
 
         async function buscarTitulo() {
@@ -188,8 +220,23 @@ HTML = """
                 let texto = "";
                 if (piada) texto += piada + "\\n\\n";
                 if (titulo) texto += titulo + "\\n";
-                if (precoAntigo) texto += `❌ De: ${precoAntigo}\\n`;
-                texto += `✅ Por só: ${preco}`;
+
+                // Detecta o maior e o menor para montar "De:" e "Por só:" corretamente
+                let de = "";
+                let por = formatarPreco(precoNum);
+                if (precoAntigoNum != null) {
+                    if (precoAntigoNum > precoNum) {
+                        de = formatarPreco(precoAntigoNum);
+                    } else if (precoNum > precoAntigoNum) {
+                        de = formatarPreco(precoNum);
+                        por = formatarPreco(precoAntigoNum);
+                    } else {
+                        de = formatarPreco(precoAntigoNum);
+                    }
+                }
+
+                if (de) texto += `❌ De: ${de}\\n`;
+                texto += `✅ Por só: ${por}`;
                 if (loja === "amazon") texto += " no Programe e Poupe";
                 texto += "\\n";
                 if (cupom) texto += `🎟️ Cupom: ${cupom}\\n`;
@@ -347,6 +394,121 @@ PIADAS = {
     "monitor": [
         "Monitor pequeno é igual cineminha de bolso! 🖥️ Amplia essa visão!"
     ],
+    "mixer": [
+        "Sopa, vitamina ou bolo, o mixer resolve tudo na cozinha. 🥣😄",
+        "Bater, triturar, misturar sem esforço? Mixer é vida! 🥤"
+    ],
+    "memoria": [
+        "Seu PC engasga com 40 abas abertas? 🧠😄",
+        "Computador lento? Uma memória nova resolve!"
+    ],
+    "memória": [
+        "Seu PC engasga com 40 abas abertas? 🧠😄",
+        "Computador lento? Uma memória nova resolve!"
+    ],
+    "ram": [
+        "Seu PC engasga com 40 abas abertas? 🧠😄"
+    ],
+    "ssd": [
+        "PC lento é igual a fila de banco: ninguém merece. 💻😄",
+        "Ligar o PC e esperar 10 minutos? SSD novo resolve!"
+    ],
+    "hd": [
+        "PC lento é igual a fila de banco: ninguém merece. 💻😄",
+        "Chega de esperar o Windows carregar! 💽"
+    ],
+    "placa de video": [
+        "Jogar no low é sofrência. 🎮😅 Placa de vídeo nova é alegria!",
+        "PC pra rodar tudo no ultra? Só com essa placa! 🎮"
+    ],
+    "placa de vídeo": [
+        "Jogar no low é sofrência. 🎮😅 Placa de vídeo nova é alegria!",
+        "PC pra rodar tudo no ultra? Só com essa placa! 🎮"
+    ],
+    "maquina de lavar": [
+        "Roupa suja acumulando? Essa máquina dá conta da bagunça. 👕😄"
+    ],
+    "lava e seca": [
+        "Roupa suja acumulando? Essa lava e seca dá conta da bagunça. 👕😄"
+    ],
+    "tanquinho": [
+        "Lavar roupa na mão é coisa do passado! 🧺😄"
+    ],
+    "processador": [
+        "Bater, triturar, misturar sem esforço? Processador resolve! 🥤"
+    ],
+    "espremedor": [
+        "Suco natural sem esforço? 🍊 Espremedor resolve!"
+    ],
+    "poltrona": [
+        "Sua coluna agradece uma poltrona nova! 🪑😌"
+    ],
+    "sofa": [
+        "Sofá novo, vida nova! 🛋️😄"
+    ],
+    "sofá": [
+        "Sofá novo, vida nova! 🛋️😄"
+    ],
+    "mesa": [
+        "Mesa nova deixa o home office até mais produtivo! 🖥️😄"
+    ],
+    "cama": [
+        "Dormir mal é coisa do passado! 🛏️😄"
+    ],
+    "colchao": [
+        "Sua coluna merece um colchão melhor! 😴"
+    ],
+    "armario": [
+        "Organização é tudo, né? 🗄️😄"
+    ],
+    "estante": [
+        "Livros e decoração pedem uma estante nova! 📚😄"
+    ],
+    "ducha": [
+        "Banho de hotel todo dia? 🚿 Ducha nova resolve!"
+    ],
+    "camera": [
+        "Fotografar como profissional? 📸 Essa câmera te leva lá!"
+    ],
+    "filmadora": [
+        "Registrar momentos sem tremer? 🎥 Essa filmadora resolve!"
+    ],
+    "drone": [
+        "Ver o mundo de cima é outro nível! 🚁😎"
+    ],
+    "gopro": [
+        "Aventura merece registro profissional! 📹😄"
+    ],
+    "bike": [
+        "Pedalar sem esforço e com estilo? 🚴‍♂️ Essa bike é sucesso!"
+    ],
+    "bicicleta": [
+        "Pedalar sem esforço e com estilo? 🚴‍♂️ Essa bike é sucesso!"
+    ],
+    "patinete": [
+        "Mobilidade rápida e sem trânsito! 🛴😄"
+    ],
+    "skate": [
+        "Radical de fininho! 🛹😎"
+    ],
+    "carrinho de bebe": [
+        "Passear com o bebê ficou fácil! 👶🛒"
+    ],
+    "cadeirinha": [
+        "Segurança e conforto para o pequeno! 👶🚗"
+    ],
+    "babador": [
+        "Hora da papinha sem bagunça! 👶🍼"
+    ],
+    "cachorro": [
+        "Seu pet merece o melhor! 🐶😍"
+    ],
+    "gato": [
+        "Seu gato vai aprovar essa! 🐱😍"
+    ],
+    "pet": [
+        "Seu pet vai amar! 🐾😍"
+    ],
 }
 
 FALLBACK = [
@@ -359,11 +521,27 @@ FALLBACK = [
 
 
 def gerar_piada(titulo):
+    if not titulo:
+        return random.choice(FALLBACK)
+
     titulo_lower = titulo.lower()
     for categoria, piadas in PIADAS.items():
         if categoria in titulo_lower:
             return random.choice(piadas)
-    return random.choice(FALLBACK)
+
+    # Geração dinâmica com o nome do produto para cobrir qualquer categoria
+    nome_produto = titulo.strip()
+    if len(nome_produto) > 60:
+        nome_produto = nome_produto[:57].rstrip() + "..."
+    padroes_dinamicos = [
+        "Já pensou em dar um up na sua vida com um {prod}? 😄",
+        "Seu {prod} já deu o que tinha que dar? Hora de trocar! 😅",
+        "Cansado de sofrer com o {prod}? Esse aqui resolve! 🎯",
+        "Achou o {prod} perfeito? Corre que é promoção! 🏃‍♂️",
+        "Vai deixar essa oferta de {prod} passar? 😱",
+        "Promoção boa de {prod} é assim: chega calada e some rápido! ⏰",
+    ]
+    return random.choice(padroes_dinamicos).format(prod=nome_produto)
 
 
 @app.route("/")
