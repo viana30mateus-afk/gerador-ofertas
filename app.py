@@ -311,6 +311,16 @@ HTML = """
                 document.getElementById("resultado").textContent = texto;
                 document.getElementById("btnCopiar").style.display = "block";
                 document.getElementById("btnWhats").style.display = "block";
+
+                // Limpa todos os campos após gerar a mensagem
+                document.getElementById("url").value = "";
+                document.getElementById("titulo").value = "";
+                document.getElementById("piada").value = "";
+                document.getElementById("preco").value = "";
+                document.getElementById("preco_antigo").value = "";
+                document.getElementById("cupom").value = "";
+                document.getElementById("loja").value = "auto";
+                document.getElementById("lojaDetectada").style.display = "none";
             } catch (e) {
                 mostrarErro("Erro ao gerar mensagem: " + e.message);
             }
